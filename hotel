@@ -1,0 +1,486 @@
+
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <vector>
+#include <sstream>
+using namespace std;
+
+// ROOM CLASS
+class Room {
+public:
+    int roomNumber;
+    string type;
+    double nightlyRate;
+    string status;
+
+    void setRoom(int number, string roomType, double cost) {
+        roomNumber = number;
+        type = roomType;
+        nightlyRate = cost;
+        status = "Available";
+    }
+
+    bool checkAvailability() {
+        return status == "Available";
+    }
+
+    void checkInRoom() {
+        status = "Occupied";
+    }
+
+    void checkoutRoom() {
+        status = "Available";
+    }
+};
+
+// CUSTOMER CLASS
+class Customer {
+private:
+    string customerID;
+    string name;
+    string phone;
+    int roomNumber;
+
+public:
+    void setCustomer(string id, string n, string p, int room) {
+        customerID = id;
+        name = n;
+        phone = p;
+        roomNumber = room;
+    }
+
+    void putCustomer() {
+        cout << "\n----- CUSTOMER DETAILS -----" << endl;
+        cout << "Customer ID: " << customerID << endl;
+        cout << "Customer Name: " << name << endl;
+        cout << "Phone Number: " << phone << endl;
+        cout << "Room Number: " << roomNumber << endl;
+    }
+};
+
+// BOOKING CLASS
+class Booking {
+public:
+    string bookingID;
+    string customerID;
+    int roomNumber;
+    string checkInDate;
+    int nights;
+    string status;
+};
+
+// REMOVE WINDOWS LINE ENDING
+void removeCarriageReturn(string& value) {
+    if (!value.empty() && value.back() == '\r') {
+        value.pop_back();
+    }
+}
+
+// CHECK ROOM AVAILABILITY
+bool isRoomAvailable(const vector<Room>& rooms, int roomNumber) {
+    for (const Room& room : rooms) {
+        if (room.roomNumber == roomNumber) {
+            return room.status == "Available";
+        }
+    }
+    return false;
+}
+
+// VALIDATE BOOKING
+bool isValidBooking(const vector<Room>& rooms, const Booking& booking) {
+    for (const Room& room : rooms) {
+        if (room.roomNumber == booking.roomNumber) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// BOOK ROOM
+bool bookRoom(vector<Room>& rooms, vector<Booking>& bookings,
+              Booking booking) {
+
+    if (booking.bookingID.empty() || booking.customerID.empty()) {
+        cout << "Booking ID and Customer ID cannot be empty!" << endl;
+        return false;
+    }
+
+    if (booking.nights <= 0) {
+        cout << "Number of nights must be greater than zero!" << endl;
+        return false;
+    }
+
+    for (const Booking& b : bookings) {
+        if (b.bookingID == booking.bookingID) {
+            cout << "Booking ID already exists!" << endl;
+            return false;
+        }
+    }
+
+    if (!isRoomAvailable(rooms, booking.roomNumber)) {
+        cout << "Room is not available or does not exist!" << endl;
+        return false;
+    }
+
+    for (Room& room : rooms) {
+        if (room.roomNumber == booking.roomNumber) {
+            room.checkInRoom();
+            break;
+        }
+    }
+
+    booking.status = "Confirmed";
+    bookings.push_back(booking);
+
+    cout << "Booking successful!" << endl;
+    return true;
+}
+
+// CHECKOUT ROOM
+bool checkoutRoom(vector<Room>& rooms, vector<Booking>& bookings,
+                  int roomNumber) {
+
+    for (Room& room : rooms) {
+        if (room.roomNumber == roomNumber &&
+            room.status == "Occupied") {
+
+            room.checkoutRoom();
+
+            for (auto it = bookings.rbegin();
+                 it != bookings.rend(); ++it) {
+
+                if (it->roomNumber == roomNumber &&
+                    it->status == "Confirmed") {
+                    it->status = "Completed";
+                    break;
+                }
+            }
+
+            cout << "Checkout successful!" << endl;
+            return true;
+        }
+    }
+
+    cout << "Room not found or not occupied!" << endl;
+    return false;
+}
+
+// READ ROOM FILE
+void readRooms(vector<Room>& rooms) {
+    ifstream file("rooms.txt");
+
+    if (!file.is_open()) {
+        cout << "Unable to open rooms.txt!" << endl;
+        return;
+    }
+
+    string line;
+    getline(file, line);
+
+    while (getline(file, line)) {
+        if (line.empty())
+            continue;
+
+        stringstream ss(line);
+        Room room;
+        string number, rate;
+
+        getline(ss, number, ',');
+        getline(ss, room.type, ',');
+        getline(ss, rate, ',');
+        getline(ss, room.status);
+
+        removeCarriageReturn(room.status);
+
+        try {
+            room.roomNumber = stoi(number);
+            room.nightlyRate = stod(rate);
+            rooms.push_back(room);
+        }
+        catch (...) {
+            cout << "Invalid room record skipped!" << endl;
+        }
+    }
+
+    file.close();
+}
+
+// SAVE ROOM FILE
+void saveRooms(const vector<Room>& rooms) {
+    ofstream file("rooms.txt");
+
+    if (!file.is_open()) {
+        cout << "Unable to save rooms.txt!" << endl;
+        return;
+    }
+
+    file << "RoomNumber,Type,NightlyRateINR,Status\n";
+
+    for (const Room& room : rooms) {
+        file << room.roomNumber << ","
+             << room.type << ","
+             << room.nightlyRate << ","
+             << room.status << endl;
+    }
+
+    file.close();
+    cout << "Room records saved!" << endl;
+}
+
+// READ BOOKING FILE
+void readBookings(vector<Booking>& bookings,
+                  const vector<Room>& rooms) {
+
+    ifstream file("bookings.txt");
+
+    if (!file.is_open()) {
+        cout << "Unable to open bookings.txt!" << endl;
+        return;
+    }
+
+    string line;
+    getline(file, line);
+
+    while (getline(file, line)) {
+        if (line.empty())
+            continue;
+
+        stringstream ss(line);
+        Booking booking;
+        string room, nights;
+
+        getline(ss, booking.bookingID, ',');
+        getline(ss, booking.customerID, ',');
+        getline(ss, room, ',');
+        getline(ss, booking.checkInDate, ',');
+        getline(ss, nights, ',');
+        getline(ss, booking.status);
+
+        removeCarriageReturn(booking.status);
+
+        try {
+            booking.roomNumber = stoi(room);
+            booking.nights = stoi(nights);
+
+            if (isValidBooking(rooms, booking) &&
+                booking.nights > 0) {
+
+                bookings.push_back(booking);
+            }
+            else {
+                cout << "Invalid booking skipped: "
+                     << booking.bookingID << endl;
+            }
+        }
+        catch (...) {
+            cout << "Invalid booking record skipped!" << endl;
+        }
+    }
+
+    file.close();
+}
+
+// SAVE BOOKING FILE
+void saveBookings(const vector<Booking>& bookings) {
+    ofstream file("bookings.txt");
+
+    if (!file.is_open()) {
+        cout << "Unable to save bookings.txt!" << endl;
+        return;
+    }
+
+    file << "BookingID,CustomerID,RoomNumber,CheckIn,Nights,Status\n";
+
+    for (const Booking& booking : bookings) {
+        file << booking.bookingID << ","
+             << booking.customerID << ","
+             << booking.roomNumber << ","
+             << booking.checkInDate << ","
+             << booking.nights << ","
+             << booking.status << endl;
+    }
+
+    file.close();
+    cout << "Booking records saved!" << endl;
+}
+
+// DISPLAY AVAILABLE ROOMS
+void displayAvailableRooms(const vector<Room>& rooms) {
+    cout << "\n----- AVAILABLE ROOMS -----" << endl;
+
+    bool found = false;
+
+    for (const Room& room : rooms) {
+        if (room.status == "Available") {
+            found = true;
+
+            cout << "Room Number: " << room.roomNumber << endl;
+            cout << "Room Type: " << room.type << endl;
+            cout << "Nightly Rate: Rs. " << room.nightlyRate << endl;
+            cout << "--------------------------" << endl;
+        }
+    }
+
+    if (!found)
+        cout << "No available rooms!" << endl;
+}
+
+// SEARCH ROOM
+void searchRoom(const vector<Room>& rooms, int roomNumber) {
+    for (const Room& room : rooms) {
+        if (room.roomNumber == roomNumber) {
+            cout << "\n----- ROOM DETAILS -----" << endl;
+            cout << "Room Number: " << room.roomNumber << endl;
+            cout << "Room Type: " << room.type << endl;
+            cout << "Nightly Rate: Rs. " << room.nightlyRate << endl;
+            cout << "Status: " << room.status << endl;
+            return;
+        }
+    }
+
+    cout << "Room not found!" << endl;
+}
+
+// DISPLAY BOOKINGS
+void displayBookings(const vector<Booking>& bookings) {
+    cout << "\n----- BOOKING RECORDS -----" << endl;
+
+    if (bookings.empty()) {
+        cout << "No bookings found!" << endl;
+        return;
+    }
+
+    for (const Booking& booking : bookings) {
+        cout << "Booking ID: " << booking.bookingID << endl;
+        cout << "Customer ID: " << booking.customerID << endl;
+        cout << "Room Number: " << booking.roomNumber << endl;
+        cout << "Check-in Date: " << booking.checkInDate << endl;
+        cout << "Nights: " << booking.nights << endl;
+        cout << "Status: " << booking.status << endl;
+        cout << "--------------------------" << endl;
+    }
+}
+
+// SEARCH BOOKING
+void searchBooking(const vector<Booking>& bookings, string bookingID) {
+    for (const Booking& booking : bookings) {
+        if (booking.bookingID == bookingID) {
+            cout << "\n----- BOOKING DETAILS -----" << endl;
+            cout << "Booking ID: " << booking.bookingID << endl;
+            cout << "Customer ID: " << booking.customerID << endl;
+            cout << "Room Number: " << booking.roomNumber << endl;
+            cout << "Check-in Date: " << booking.checkInDate << endl;
+            cout << "Nights: " << booking.nights << endl;
+            cout << "Status: " << booking.status << endl;
+            return;
+        }
+    }
+
+    cout << "Booking not found!" << endl;
+}
+
+// MAIN FUNCTION
+int main() {
+    vector<Room> rooms;
+    vector<Booking> bookings;
+
+    readRooms(rooms);
+    readBookings(bookings, rooms);
+
+    cout << "\nRooms loaded: " << rooms.size() << endl;
+    cout << "Bookings loaded: " << bookings.size() << endl;
+
+    int choice;
+
+    do {
+        cout << "\n===== HOTEL MANAGEMENT SYSTEM =====" << endl;
+        cout << "1. Display Available Rooms" << endl;
+        cout << "2. Search Room" << endl;
+        cout << "3. Book Room" << endl;
+        cout << "4. Checkout Room" << endl;
+        cout << "5. Display All Bookings" << endl;
+        cout << "6. Search Booking" << endl;
+        cout << "0. Save and Exit" << endl;
+
+        cout << "\nEnter your choice: ";
+        cin >> choice;
+
+        switch (choice) {
+        case 1:
+            displayAvailableRooms(rooms);
+            break;
+
+        case 2: {
+            int roomNumber;
+            cout << "Enter room number: ";
+            cin >> roomNumber;
+            searchRoom(rooms, roomNumber);
+            break;
+        }
+
+        case 3: {
+            Booking booking;
+
+            cout << "Enter Booking ID: ";
+            cin >> booking.bookingID;
+
+            cout << "Enter Customer ID: ";
+            cin >> booking.customerID;
+
+            cout << "Enter Room Number: ";
+            cin >> booking.roomNumber;
+
+            cout << "Enter Check-in Date (YYYY-MM-DD): ";
+            cin >> booking.checkInDate;
+
+            cout << "Enter Number of Nights: ";
+            cin >> booking.nights;
+
+            if (bookRoom(rooms, bookings, booking)) {
+                saveRooms(rooms);
+                saveBookings(bookings);
+            }
+
+            break;
+        }
+
+        case 4: {
+            int roomNumber;
+            cout << "Enter room number: ";
+            cin >> roomNumber;
+
+            if (checkoutRoom(rooms, bookings, roomNumber)) {
+                saveRooms(rooms);
+                saveBookings(bookings);
+            }
+
+            break;
+        }
+
+        case 5:
+            displayBookings(bookings);
+            break;
+
+        case 6: {
+            string bookingID;
+            cout << "Enter Booking ID: ";
+            cin >> bookingID;
+            searchBooking(bookings, bookingID);
+            break;
+        }
+
+        case 0:
+            saveRooms(rooms);
+            saveBookings(bookings);
+            cout << "Thank you! Exiting system." << endl;
+            break;
+
+        default:
+            cout << "Invalid choice! Try again." << endl;
+        }
+
+    } while (choice != 0);
+
+    return 0;
+}
